@@ -13,7 +13,7 @@ from model.wd import WideAndDeep
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrain_model', default='')
-    parser.add_argument('--dataset_name', default='movielens1M')
+    parser.add_argument('--dataset_name', default='movielens1M', help='required to be one of [movielens1M, taobaoAd]')
     parser.add_argument('--dataset_path', default='./datahub/movielens1M/ml-1M.pkl')
     parser.add_argument('--warmup_model', default='cvar', help="required to be one of [base, mwuf, metaE, cvar]")
     parser.add_argument('--is_dropoutnet', type=bool, default=False, help="whether to use dropout net for pretrain")

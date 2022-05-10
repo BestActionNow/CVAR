@@ -192,35 +192,6 @@ def base(model,
     print("*"*20, "base", "*"*20)
     return auc_list
 
-def drop(model,
-         dataloaders,
-         model_name,
-         epoch,
-         lr,
-         weight_decay,
-         device,
-         save_dir):
-    print("*"*20, "base", "*"*20)
-    device = torch.device(device)
-    save_dir = os.path.join(save_dir, model_name)
-    save_path = os.path.join(save_dir, 'model.pth')
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
-    # data set list
-    auc_list = []
-    dataset_list = ['train_warm_a', 'train_warm_b', 'train_warm_c', 'test']
-    for i, train_s in enumerate(dataset_list):
-        auc, f1 = test(model, dataloaders['test'], device)
-        auc_list.append(auc.item())
-        print("[base model] evaluate on [test dataset] auc: {:.4f}, F1 socre: {:.4f}".format(auc, f1))
-        if i < 3:
-            model.only_optimize_itemid()
-            train(model, dataloaders[train_s], device, epoch, lr, weight_decay, save_path)
-    print("*"*20, "base", "*"*20)
-    return auc_list
-
-
 def metaE(model,
           dataloaders,
           model_name,

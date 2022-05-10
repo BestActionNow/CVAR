@@ -52,7 +52,8 @@ Parameter | Options | Usage
 --dataset_path | | Specify the dataset path for evaluation
 --model_name | [afm, afn, dcn, deepfm, fm, pnn, wide&deep] | Specify the backbone for recommendation 
 --warmup_model |[mwuf, metaE, cvar] | Specify the warm-up method
---is_dropoutnet | [True, False] | Sepficy whether to use dropoutNet for backbone pretraining
+--is_dropoutnet | [True, False] | Specify whether to use dropoutNet for backbone pretraining
+--device | [cpu, cuda:0] | Specify the device (CPU or GPU) to run the program
 
 Some other settable parameters could be found in the `./main.py` file.
 

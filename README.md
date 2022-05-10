@@ -14,8 +14,11 @@ Dependencies
 ------------
 
 Install Pytorch 1.10.0, using pip or conda, should resolve all dependencies.
+
 Tested with Python 3.8.5, but should work with 3.x as well.
+
 Tested with sklearn 0.0
+
 Tested on CPU or GPU.
 
 Dataset

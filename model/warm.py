@@ -333,30 +333,6 @@ class CVAR(nn.Module):
                 param.requires_grad_(False)
         return
 
-    # def warm_item_id_p(self, x_dict):
-    #     # get embedding of item features
-    #     item_embs = []
-    #     for item_f in self.item_features: 
-    #         type = self.model.description[item_f][1]
-    #         x = x_dict[item_f]
-    #         if type == 'spr':
-    #             emb = self.model.emb_layer[item_f](x).squeeze()
-    #         elif type == 'ctn':
-    #             emb = x
-    #         elif type == 'seq':
-    #             emb = self.model.emb_layer[item_f](x) \
-    #                     .sum(dim=1, keepdim=True).squeeze()
-    #         else:
-    #             raise ValueError('illegal feature tpye for warm: {}'.format(item_f))
-    #         item_embs.append(emb)
-    #     sideinfo_emb = torch.concat(item_embs, dim=1)
-    #     freq = x_dict['count']
-    #     mean_p = self.mean_encoder_p(torch.concat([sideinfo_emb], 1))
-    #     log_v_p = self.log_v_encoder_p(torch.concat([sideinfo_emb], 1))
-    #     z = mean_p + torch.exp(log_v_p * 0.5) * torch.randn(mean_p.size()).to(self.device)
-    #     pred = self.decoder(torch.concat([z, freq], 1))
-    #     return pred
-
     def warm_item_id(self, x_dict):
         # get original item id embeddings
         item_ids = x_dict[self.item_id_name]

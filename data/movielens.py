@@ -62,7 +62,7 @@ class MovieLens1MColdStartDataLoader(object):
             else:
                 self.dataloaders[key] = DataLoader(Movielens1MbaseDataset(dataset_name, df, self.description, device), batch_size=bsz, shuffle=False)
         self.keys = list(self.dataloaders.keys())
-        self.item_features = ['year', 'title', 'genres', 'count']
+        self.item_features = ['item_id', 'year', 'title', 'genres', 'count']
                                 
 
     def __getitem__(self, name):

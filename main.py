@@ -12,28 +12,31 @@ from model.wd import WideAndDeep
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pretrain_model', default='')
-    parser.add_argument('--dataset_name', default='movielens1M', help='required to be one of [movielens1M, taobaoAd]')
-    parser.add_argument('--dataset_path', default='./datahub/movielens1M/ml-1M.pkl')
+    parser.add_argument('--pretrain_model_path', default='./pretrain_backbones')
+    parser.add_argument('--dataset_name', default='taobaoAD', help='required to be one of [movielens1M, taobaoAD]')
+    parser.add_argument('--datahub_path', default='./datahub/')
     parser.add_argument('--warmup_model', default='cvar', help="required to be one of [base, mwuf, metaE, cvar]")
     parser.add_argument('--is_dropoutnet', type=bool, default=False, help="whether to use dropout net for pretrain")
     parser.add_argument('--bsz', type=int, default=2048)
     parser.add_argument('--shuffle', type=int, default=1)
     parser.add_argument('--model_name', default='deepfm', help='backbone name, we implemented [fm, wd, deepfm, afn, ipnn, opnn, afm, dcn]')
     parser.add_argument('--epoch', type=int, default=1)
+    parser.add_argument('--cvar_epochs', type=int, default=1)
+    parser.add_argument('--cvar_iters', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--save_dir', default='chkpt')
-    parser.add_argument('--seed', type=int, default=-1)
+    parser.add_argument('--seed', type=int, default=1234)
 
     args = parser.parse_args()
     return args
 
-def get_loaders(name, device, path, bsz, shuffle):
+def get_loaders(name, datahub_path, device, bsz, shuffle):
+    path = os.path.join(datahub_path, name, "{}_data.pkl".format(name))
     if name == 'movielens1M':
         dataloaders = MovieLens1MColdStartDataLoader(name, path, device, bsz=bsz, shuffle=shuffle)
-    elif name == 'taobaoAd':
+    elif name == 'taobaoAD':
         dataloaders = TaobaoADColdStartDataLoader(name, path, device, bsz=bsz, shuffle=shuffle)
     else:
         raise ValueError('unkown dataset name: {}'.format(name))
@@ -78,7 +81,6 @@ def dropoutNet_train(model, data_loader, device, epoch, lr, weight_decay, save_p
     criterion = torch.nn.BCELoss()
     optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), \
                                             lr=lr, weight_decay=weight_decay)
-    # early_stopper = EarlyStopper(num_trials=2, save_path=save_path)
     for epoch_i in range(1, epoch + 1):
         epoch_loss = 0.0
         total_loss = 0
@@ -112,7 +114,6 @@ def train(model, data_loader, device, epoch, lr, weight_decay, save_path, log_in
     criterion = torch.nn.BCELoss()
     optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, model.parameters()), \
                                             lr=lr, weight_decay=weight_decay)
-    # early_stopper = EarlyStopper(num_trials=2, save_path=save_path)
     for epoch_i in range(1, epoch + 1):
         epoch_loss = 0.0
         total_loss = 0
@@ -126,18 +127,12 @@ def train(model, data_loader, device, epoch, lr, weight_decay, save_path, log_in
             epoch_loss += loss.item()
             total_loss += loss.item()
             if (i + 1) % log_interval == 0:
-                print("    iters {}/{} loss: {:.4f}".format(i + 1, total_iters + 1, total_loss/log_interval), end='\r')
+                print("    Iter {}/{} loss: {:.4f}".format(i + 1, total_iters + 1, total_loss/log_interval), end='\r')
                 total_loss = 0
-
-        print("Epoch {}/{} loss: {:.4f}".format(epoch_i, epoch, epoch_loss/total_iters), " " * 20)
-        # print("Epoch {}/{} loss: {:.4f} auc: {:.4f}".format(epoch_i, epoch, epoch_loss/total_iters, auc), " " * 10)
-        # if not early_stopper.is_continuable(model, auc):
-        #     print('Best validation auc: {:.4f}'.format(early_stopper.best_accuracy))
-        #     break
     return 
 
 def pretrain(dataset_name, 
-         dataset_path,
+         datahub_name,
          bsz,
          shuffle,
          model_name,
@@ -151,7 +146,7 @@ def pretrain(dataset_name,
     save_dir = os.path.join(save_dir, model_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    dataloaders = get_loaders(dataset_name, device, dataset_path, bsz, shuffle==1)
+    dataloaders = get_loaders(dataset_name, datahub_name, device, bsz, shuffle==1)
     model = get_model(model_name, dataloaders).to(device)
     save_path = os.path.join(save_dir, 'model.pth')
     print("="*20, 'pretrain {}'.format(model_name), "="*20)
@@ -336,6 +331,8 @@ def cvar(model,
        dataloaders,
        model_name,
        epoch,
+       cvar_epochs,
+       cvar_iters,
        lr,
        weight_decay,
        device,
@@ -353,38 +350,37 @@ def cvar(model,
                     train_loader=train_base,
                     device=device).to(device)
     warm_model.init_cvar()
-    def train_cvar(dataloader, epoch=2, logger=False):
+    def warm_up(dataloader, epochs, iters, logger=False):
         warm_model.train()
         criterion = torch.nn.BCELoss()
-        warm_model.optimizer_cvar()
+        warm_model.optimize_cvar()
         optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, warm_model.parameters()), \
                                                 lr=lr, weight_decay=weight_decay)
-        total_iters = len(dataloader)
-        for e in range(epoch):
+        batch_num = len(dataloader)
+        # train warm-up model
+        for _ in range(epochs):
             for i, (features, label) in enumerate(dataloader):
-                recon_loss, reg_loss, target = warm_model(features)
-                main_loss = criterion(target, label.float())
-                loss = main_loss + recon_loss + reg_loss
-                warm_model.zero_grad()
-                loss.backward()
-                optimizer.step()
-                if (i + 1) % 10 == 0 and logger:
-                    print("    iters {}/{}, loss: {:.4f}, main loss: {:.4f}, recon loss: {:.4f}, reg loss: {:.4f}" \
-                            .format(i + 1, int(total_iters), \
-                            loss.item(),  main_loss, recon_loss, reg_loss), end='\r')
-            if logger:
-                print("{}/{}".format(e, epoch))
-    # replace item id embedding with warmed 
-    def warm(is_cold=False):
+                a, b, c, d = 0.0, 0.0, 0.0, 0.0
+                for _ in range(iters):
+                    target, recon_term, reg_term  = warm_model(features)
+                    main_loss = criterion(target, label.float())
+                    loss = main_loss + recon_term + 1e-4 * reg_term
+                    warm_model.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    a, b, c, d = a + loss.item(), b + main_loss.item(), c + recon_term.item(), d + reg_term.item()
+                a, b, c, d = a/iters, b/iters, c/iters, d/iters
+                if logger and (i + 1) % 10 == 0:
+                    print("    Iter {}/{}, loss: {:.4f}, main loss: {:.4f}, recon loss: {:.4f}, reg loss: {:.4f}" \
+                            .format(i + 1, batch_num, a, b, c, d), end='\r')
+        # warm-up item id embedding
         train_a = dataloaders['train_warm_a']
         for (features, label) in train_a:
             origin_item_id_emb = warm_model.model.emb_layer[warm_model.item_id_name].weight.data
-            warm_item_id_emb = warm_model.warm_item_id_p(features, is_cold)
+            warm_item_id_emb, _, _ = warm_model.warm_item_id(features)
             indexes = features[warm_model.item_id_name].squeeze()
-            # origin_item_id_emb[indexes, ] = 0.5 * warm_item_id_emb + 0.5 * origin_item_id_emb[indexes, ]
             origin_item_id_emb[indexes, ] = warm_item_id_emb
-    train_cvar(train_base, epoch=1, logger=True)
-    warm(is_cold=True)
+    warm_up(train_base, epochs=1, iters=cvar_iters, logger=True)
     # test by steps 
     dataset_list = ['train_warm_a', 'train_warm_b', 'train_warm_c', 'test']
     auc_list = []
@@ -393,12 +389,11 @@ def cvar(model,
         train_s = dataset_list[i]
         auc, f1 = test(warm_model.model, dataloaders['test'], device)
         auc_list.append(auc.item())
-        print("[cvar]] evaluate on [test dataset] auc: {:.4f}, F1 score: {:.4f}".format(auc, f1))
+        print("[cvar] evaluate on [test dataset] auc: {:.4f}, F1 score: {:.4f}".format(auc, f1))
         if i < len(dataset_list) - 1:
             warm_model.model.only_optimize_itemid()
             train(warm_model.model, dataloaders[train_s], device, epoch, lr, weight_decay, save_path)
-            train_cvar(dataloaders[train_s], epoch=2, logger=False)
-            warm()
+            warm_up(dataloaders[train_s], epochs=cvar_epochs, iters=cvar_iters, logger=False)
     print("*"*20, "cvar", "*"*20)
     return auc_list
 
@@ -410,7 +405,7 @@ def run(model, dataloaders, args, model_name, warm):
     elif warm == 'metaE': 
         auc_list = metaE(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
     elif warm == 'cvar': 
-        auc_list = cvar(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
+        auc_list = cvar(model, dataloaders, model_name, args.epoch, args.cvar_epochs, args.cvar_iters, args.lr, args.weight_decay, args.device, args.save_dir)
     return auc_list
 
 if __name__ == '__main__':
@@ -423,13 +418,13 @@ if __name__ == '__main__':
     print(args.model_name)
     torch.cuda.empty_cache()
     # load or train pretrain models
-    drop_suffix = '_dropoutnet' if args.is_dropoutnet else ''
-    model_path = os.path.join(args.pretrain_model + '.' + args.model_name) + drop_suffix
+    drop_suffix = '-dropoutnet' if args.is_dropoutnet else ''
+    model_path = os.path.join(args.pretrain_model_path, args.model_name + drop_suffix + '-{}-{}'.format(args.dataset_name, args.seed))
     if os.path.exists(model_path):
         model = torch.load(model_path).to(args.device)
-        dataloaders = get_loaders(args.dataset_name, args.device, args.dataset_path, args.bsz, args.shuffle==1)
+        dataloaders = get_loaders(args.dataset_name, args.datahub_path, args.device, args.bsz, args.shuffle==1)
     else:
-        model, dataloaders = pretrain(args.dataset_name, args.dataset_path, args.bsz, args.shuffle, args.model_name, \
+        model, dataloaders = pretrain(args.dataset_name, args.datahub_path, args.bsz, args.shuffle, args.model_name, \
             args.epoch, args.lr, args.weight_decay, args.device, args.save_dir, args.is_dropoutnet)
         if len(args.pretrain_model) > 0:
             torch.save(model, model_path)

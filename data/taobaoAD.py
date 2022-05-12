@@ -59,9 +59,7 @@ class TaobaoADColdStartDataLoader(object):
                 continue
             self.dataloaders[key] = DataLoader(TaobaoADbaseDataset(dataset_name, df, self.description, device), batch_size=bsz, shuffle=shuffle)
         self.keys = list(self.dataloaders.keys())
-        self.item_features = [ #"pid", "age_level", "pvalue_level", "shopping_level", \
-            "cate_id", "campaign_id", "customer", "brand", "price", \
-            "time_stamp", "count"]
+        self.item_features = ['item_id', 'cate_id', 'customer', 'campaign_id']
 
     def __getitem__(self, name):
         assert name in self.keys, '{} not in keys of datasets'.format(name)

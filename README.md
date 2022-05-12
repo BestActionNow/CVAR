@@ -26,9 +26,9 @@ Dataset
 
 You can download the datasets we introduced in our paper from following links:
 * [Movielens1M](http://files.grouplens.org/datasets/movielens/)
-* [TaobaoAd](https://tianchi.aliyun.com/dataset/dataDetail?dataId=56)
+* [TaobaoAD](https://tianchi.aliyun.com/dataset/dataDetail?dataId=56)
 
-Raw data need to be preprocessed before using. The data preprocessing scripts are given in `datahub/movielens1M/ml-1m_preprocess.ipynb` and `datahub/taobaoAd/taobao-ad_preprocess.ipynb` for movielens1M and taobaoAd respectively.
+Raw data need to be preprocessed before using. The data preprocessing scripts are given in `datahub/movielens1M/movielens1M_preprocess.ipynb` and `datahub/taobaoAd/taobaoAD_preprocess.ipynb` for movielens1M and taobaoAD respectively.
 
 How to Use
 ----------
@@ -41,7 +41,10 @@ How to Use
 You can conduct experiments as following command:
 <br>
 <br>
-`python main.py --model_name deepfm --dataset_name movielens1M --dataset_path ./datahub/movielens1M/ml-1M.pkl --warmup_model cvar`
+`python main.py --dataset_name movielens1M  --model_name deepfm --warmup_model cvar --cvar_epochs 2  --cvar_iter 10`
+<br>
+<br>
+`python main.py --dataset_name taobaoAD  --model_name deepfm  --warmup_model cvar --cvar_epochs 2 --cvar_iters 1`
 <br>
 <br>
 The program will print the AUC, F1 in cold-start stage and three warm-up stages. Part of settable parameters are listed as follows:
@@ -50,7 +53,7 @@ Parameter | Options | Usage
 --------- | ------- | -----
 --dataset_name |  | Specify the dataset for evaluation
 --dataset_path | | Specify the dataset path for evaluation
---model_name | [afm, afn, dcn, deepfm, fm, pnn, wide&deep] | Specify the backbone for recommendation 
+--model_name | [afm, afn, dcn, deepfm, fm, pnn, wd] | Specify the backbone for recommendation 
 --warmup_model |[mwuf, metaE, cvar] | Specify the warm-up method
 --is_dropoutnet | [True, False] | Specify whether to use dropoutNet for backbone pretraining
 --device | [cpu, cuda:0] | Specify the device (CPU or GPU) to run the program

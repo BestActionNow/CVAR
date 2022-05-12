@@ -286,47 +286,24 @@ class CVAR(nn.Module):
         self.item_id_name = item_id_name
         self.item_features = []
         self.output_emb_size = 0
+        self.warmup_emb_layer = nn.ModuleDict()
         for item_f in item_features:
             assert item_f in model.features, "unkown feature: {}".format(item_f)
-            type = self.model.description[item_f][1]
+            size, type = self.model.description[item_f]
             if type == 'spr' or type == 'seq':
                 self.output_emb_size += emb_dim
+                self.warmup_emb_layer["warmup_{}".format(item_f)] = nn.Embedding(size, emb_dim)
             elif type == 'ctn':
                 self.output_emb_size += 1
             else:
                 raise ValueError('illegal feature tpye for warm: {}'.format(item_f))
             self.item_features.append(item_f) 
         self.origin_item_emb = self.model.emb_layer[self.item_id_name]
-
-        self.mean_encoder = nn.Sequential(
-            nn.Linear(emb_dim, 16),
-            nn.ReLU(),
-            nn.Linear(16, 8),
-        )
-
-        self.log_v_encoder = nn.Sequential(
-            nn.Linear(emb_dim, 16),
-            nn.ReLU(),
-            nn.Linear(16, 8),
-        )
-
-        self.mean_encoder_p = nn.Sequential(
-            nn.Linear(self.output_emb_size, 16),
-            nn.ReLU(),
-            nn.Linear(16, 8),
-        )
-
-        self.log_v_encoder_p = nn.Sequential(
-            nn.Linear(self.output_emb_size, 16),
-            nn.ReLU(),
-            nn.Linear(16, 8),
-        )
-
-        self.decoder = nn.Sequential(
-            nn.Linear(9, 12),
-            nn.ReLU(),
-            nn.Linear(12, 16),
-        )
+        self.mean_encoder = nn.Linear(emb_dim, 16)
+        self.log_v_encoder = nn.Linear(emb_dim, 16)
+        self.mean_encoder_p = nn.Linear(self.output_emb_size, 16)
+        self.log_v_encoder_p = nn.Linear(self.output_emb_size, 16)
+        self.decoder = nn.Linear(17, 16)
         return
 
     def wasserstein(self, mean1, log_v1, mean2, log_v2):
@@ -348,40 +325,37 @@ class CVAR(nn.Module):
             if ('encoder') in name or ('decoder' in name):
                 torch.nn.init.uniform_(param, -0.01, 0.01)
 
-    def optimizer_cvar(self):
+    def optimize_cvar(self):
         for name, param in self.named_parameters():
-            if ('encoder' in name) or ('decoder' in name):
+            if ('encoder' in name) or ('decoder' in name) or ('warmup' in name):
                 param.requires_grad_(True)
             else:
                 param.requires_grad_(False)
-            for item_f in self.item_features:
-                if item_f in name:
-                    param.requires_grad_(True)
         return
 
-    def warm_item_id_p(self, x_dict):
-        # get embedding of item features
-        item_embs = []
-        for item_f in self.item_features: 
-            type = self.model.description[item_f][1]
-            x = x_dict[item_f]
-            if type == 'spr':
-                emb = self.model.emb_layer[item_f](x).squeeze()
-            elif type == 'ctn':
-                emb = x
-            elif type == 'seq':
-                emb = self.model.emb_layer[item_f](x) \
-                        .sum(dim=1, keepdim=True).squeeze()
-            else:
-                raise ValueError('illegal feature tpye for warm: {}'.format(item_f))
-            item_embs.append(emb)
-        sideinfo_emb = torch.concat(item_embs, dim=1)
-        freq = x_dict['count']
-        mean_p = self.mean_encoder_p(torch.concat([sideinfo_emb], 1))
-        log_v_p = self.log_v_encoder_p(torch.concat([sideinfo_emb], 1))
-        z = mean_p + torch.exp(log_v_p * 0.5) * torch.randn(mean_p.size()).to(self.device)
-        pred = self.decoder(torch.concat([z, freq], 1))
-        return pred
+    # def warm_item_id_p(self, x_dict):
+    #     # get embedding of item features
+    #     item_embs = []
+    #     for item_f in self.item_features: 
+    #         type = self.model.description[item_f][1]
+    #         x = x_dict[item_f]
+    #         if type == 'spr':
+    #             emb = self.model.emb_layer[item_f](x).squeeze()
+    #         elif type == 'ctn':
+    #             emb = x
+    #         elif type == 'seq':
+    #             emb = self.model.emb_layer[item_f](x) \
+    #                     .sum(dim=1, keepdim=True).squeeze()
+    #         else:
+    #             raise ValueError('illegal feature tpye for warm: {}'.format(item_f))
+    #         item_embs.append(emb)
+    #     sideinfo_emb = torch.concat(item_embs, dim=1)
+    #     freq = x_dict['count']
+    #     mean_p = self.mean_encoder_p(torch.concat([sideinfo_emb], 1))
+    #     log_v_p = self.log_v_encoder_p(torch.concat([sideinfo_emb], 1))
+    #     z = mean_p + torch.exp(log_v_p * 0.5) * torch.randn(mean_p.size()).to(self.device)
+    #     pred = self.decoder(torch.concat([z, freq], 1))
+    #     return pred
 
     def warm_item_id(self, x_dict):
         # get original item id embeddings
@@ -391,33 +365,34 @@ class CVAR(nn.Module):
         item_embs = []
         for item_f in self.item_features: 
             type = self.model.description[item_f][1]
+            name = "warmup_{}".format(item_f)
             x = x_dict[item_f]
             if type == 'spr':
-                emb = self.model.emb_layer[item_f](x).squeeze()
+                emb = self.warmup_emb_layer[name](x).squeeze()
             elif type == 'ctn':
                 emb = x
             elif type == 'seq':
-                emb = self.model.emb_layer[item_f](x) \
+                emb = self.warmup_emb_layer[name](x) \
                         .sum(dim=1, keepdim=True).squeeze()
             else:
                 raise ValueError('illegal feature tpye for warm: {}'.format(item_f))
             item_embs.append(emb)
         sideinfo_emb = torch.concat(item_embs, dim=1)
-        mean = self.mean_encoder(torch.concat([item_id_emb], 1))
-        log_v = self.log_v_encoder(torch.concat([item_id_emb], 1))
-        z = mean + torch.exp(log_v * 0.5) * torch.randn(mean.size()).to(self.device)
+        mean = self.mean_encoder(item_id_emb)
+        log_v = self.log_v_encoder(item_id_emb)
+        mean_p = self.mean_encoder_p(sideinfo_emb)
+        log_v_p = self.log_v_encoder_p(sideinfo_emb)
+        reg_term = self.wasserstein(mean, log_v, mean_p, log_v_p)
+        z = mean + 1e-4 * torch.exp(log_v * 0.5) * torch.randn(mean.size()).to(self.device)
+        z_p = mean_p + 1e-4 * torch.exp(log_v_p * 0.5) * torch.randn(mean_p.size()).to(self.device)
         freq = x_dict['count']
         pred = self.decoder(torch.concat([z, freq], 1))
-        mean_p = self.mean_encoder_p(torch.concat([sideinfo_emb], 1))
-        log_v_p = self.log_v_encoder_p(torch.concat([sideinfo_emb], 1))
-        reg_term = self.wasserstein(mean, log_v, mean_p, log_v_p)
-        return pred, reg_term
+        pred_p = self.decoder(torch.concat([z_p, freq], 1))
+        recon_term = torch.square(pred - item_id_emb).sum(-1).mean()
+        return pred_p, reg_term, recon_term
 
     def forward(self, x_dict):
-        item_ids = x_dict[self.item_id_name]
-        item_id_emb = self.origin_item_emb(item_ids).squeeze()
-        warm_id_emb, reg_term = self.warm_item_id(x_dict)
-        recon_loss = torch.square(warm_id_emb - item_id_emb).sum(-1).mean()
+        warm_id_emb, reg_term, recon_term = self.warm_item_id(x_dict)
         target = self.model.forward_with_item_id_emb(warm_id_emb, x_dict)
-        return recon_loss, reg_term, target
+        return target, recon_term, reg_term
 

@@ -17,7 +17,7 @@ Install Pytorch 1.10.0, using pip or conda, should resolve all dependencies.
 
 Tested with Python 3.8.5, but should work with 3.x as well.
 
-Tested with sklearn 0.0
+Tested with sklearn 0.0.
 
 Tested on CPU or GPU.
 
@@ -41,7 +41,7 @@ How to Use
 You can conduct experiments as following command:
 <br>
 <br>
-`python main.py --dataset_name movielens1M  --model_name deepfm --warmup_model cvar --cvar_epochs 2  --cvar_iter 10`
+`python main.py --dataset_name movielens1M  --model_name deepfm --warmup_model cvar --cvar_epochs 2  --cvar_iters 10`
 <br>
 <br>
 `python main.py --dataset_name taobaoAD  --model_name deepfm  --warmup_model cvar --cvar_epochs 2 --cvar_iters 1`

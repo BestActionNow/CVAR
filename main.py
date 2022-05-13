@@ -358,7 +358,7 @@ def cvar(model,
                                                 lr=lr, weight_decay=weight_decay)
         batch_num = len(dataloader)
         # train warm-up model
-        for _ in range(epochs):
+        for e in range(epochs):
             for i, (features, label) in enumerate(dataloader):
                 a, b, c, d = 0.0, 0.0, 0.0, 0.0
                 for _ in range(iters):

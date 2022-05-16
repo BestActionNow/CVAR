@@ -426,7 +426,7 @@ if __name__ == '__main__':
     else:
         model, dataloaders = pretrain(args.dataset_name, args.datahub_path, args.bsz, args.shuffle, args.model_name, \
             args.epoch, args.lr, args.weight_decay, args.device, args.save_dir, args.is_dropoutnet)
-        if len(args.pretrain_model) > 0:
+        if len(args.pretrain_model_path) > 0:
             torch.save(model, model_path)
     # warmup train and test
     avg_auc_list = []

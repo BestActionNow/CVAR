@@ -49,7 +49,7 @@ You can conduct experiments as following command:
 <br>
 Notice that the hyperparameter *--cvar_iters* is set 10 for movielens1M dataset while 1 for taobaoAD dataset. 
 
-Moreover, the command to get every data point in our paper is given in  `./run.sh`, including some hyperparameters and random seed setting. 
+Moreover, the command to get every data point in our paper is given in  `./run.sh`, including some hyperparameters and random seed setting. Default random seed is **1234**. 
 
 The program will print the AUC, F1 in cold-start stage and three warm-up stages. Part of settable parameters are listed as follows:
 

@@ -41,22 +41,27 @@ How to Use
 You can conduct experiments as following command:
 <br>
 <br>
-`python main.py --dataset_name movielens1M  --model_name deepfm --warmup_model cvar --cvar_epochs 2  --cvar_iters 10`
+`python main.py --dataset_name movielens1M  --model_name deepfm --warmup_model cvar  --cvar_iters 10`
 <br>
 <br>
-`python main.py --dataset_name taobaoAD  --model_name deepfm  --warmup_model cvar --cvar_epochs 2 --cvar_iters 1`
+`python main.py --dataset_name taobaoAD  --model_name deepfm  --warmup_model cvar  --cvar_iters 1`
 <br>
 <br>
+Notice that the hyperparameter *--cvar_iters* is set 10 for movielens1M dataset while 1 for taobaoAD dataset. 
+
+Moreover, the command to get every data point in our paper is given in  `run.sh`, including some hyperparameters and random seed setting. 
+
 The program will print the AUC, F1 in cold-start stage and three warm-up stages. Part of settable parameters are listed as follows:
 
 Parameter | Options | Usage
 --------- | ------- | -----
 --dataset_name |  | Specify the dataset for evaluation
 --dataset_path | | Specify the dataset path for evaluation
---model_name | [afm, afn, dcn, deepfm, fm, pnn, wd] | Specify the backbone for recommendation 
---warmup_model |[mwuf, metaE, cvar] | Specify the warm-up method
+--model_name | [fm, deepfm, wd, dcn, ipnn, opnn] | Specify the backbone for recommendation 
+--warmup_model |[base, mwuf, metaE, cvar_init, cvar] | Specify the warm-up method
 --is_dropoutnet | [True, False] | Specify whether to use dropoutNet for backbone pretraining
 --device | [cpu, cuda:0] | Specify the device (CPU or GPU) to run the program
+--runs | | Specify the number of executions to compute average metrics
 
 Some other settable parameters could be found in the `./main.py` file.
 

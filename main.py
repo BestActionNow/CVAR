@@ -1,5 +1,6 @@
 import os
 import copy
+from matplotlib.pyplot import axis
 import torch
 import random
 import numpy as np
@@ -12,21 +13,22 @@ from model.wd import WideAndDeep
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pretrain_model_path', default='./pretrain_backbones')
+    parser.add_argument('--pretrain_model_path', default='')
     parser.add_argument('--dataset_name', default='taobaoAD', help='required to be one of [movielens1M, taobaoAD]')
     parser.add_argument('--datahub_path', default='./datahub/')
-    parser.add_argument('--warmup_model', default='cvar', help="required to be one of [base, mwuf, metaE, cvar]")
+    parser.add_argument('--warmup_model', default='cvar', help="required to be one of [base, mwuf, metaE, cvar, cvar_init]")
     parser.add_argument('--is_dropoutnet', type=bool, default=False, help="whether to use dropout net for pretrain")
     parser.add_argument('--bsz', type=int, default=2048)
     parser.add_argument('--shuffle', type=int, default=1)
     parser.add_argument('--model_name', default='deepfm', help='backbone name, we implemented [fm, wd, deepfm, afn, ipnn, opnn, afm, dcn]')
     parser.add_argument('--epoch', type=int, default=1)
-    parser.add_argument('--cvar_epochs', type=int, default=1)
+    parser.add_argument('--cvar_epochs', type=int, default=2)
     parser.add_argument('--cvar_iters', type=int, default=10)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--save_dir', default='chkpt')
+    parser.add_argument('--runs', type=int, default=3, help = 'number of executions to compute the average metrics')
     parser.add_argument('--seed', type=int, default=1234)
 
     args = parser.parse_args()
@@ -176,16 +178,18 @@ def base(model,
         os.makedirs(save_dir)
     # data set list
     auc_list = []
+    f1_list = []
     dataset_list = ['train_warm_a', 'train_warm_b', 'train_warm_c', 'test']
     for i, train_s in enumerate(dataset_list):
         auc, f1 = test(model, dataloaders['test'], device)
         auc_list.append(auc.item())
+        f1_list.append(f1.item())
         print("[base model] evaluate on [test dataset] auc: {:.4f}, F1 socre: {:.4f}".format(auc, f1))
         if i < 3:
             model.only_optimize_itemid()
             train(model, dataloaders[train_s], device, epoch, lr, weight_decay, save_path)
     print("*"*20, "base", "*"*20)
-    return auc_list
+    return auc_list, f1_list
 
 def metaE(model,
           dataloaders,
@@ -239,17 +243,19 @@ def metaE(model,
     # test by steps 
     dataset_list = ['train_warm_a', 'train_warm_b', 'train_warm_c', 'test']
     auc_list = []
+    f1_list = []
     for i, train_s in enumerate(dataset_list):
         print("#"*10, dataset_list[i],'#'*10)
         train_s = dataset_list[i]
         auc, f1 = test(metaE_model.model, dataloaders['test'], device)
         auc_list.append(auc.item())
+        f1_list.append(f1.item())
         print("[metaE] evaluate on [test dataset] auc: {:.4f}, F1 score: {:.4f}".format(auc, f1))
         if i < len(dataset_list) - 1:
             metaE_model.model.only_optimize_itemid()
             train(metaE_model.model, dataloaders[train_s], device, epoch, lr, weight_decay, save_path)
     print("*"*20, "metaE", "*"*20)
-    return auc_list
+    return auc_list, f1_list
 
 def mwuf(model,
          dataloaders,
@@ -315,17 +321,19 @@ def mwuf(model,
     # test by steps 
     dataset_list = ['train_warm_a', 'train_warm_b', 'train_warm_c', 'test']
     auc_list = []
+    f1_list = []
     for i, train_s in enumerate(dataset_list):
         print("#"*10, dataset_list[i],'#'*10)
         train_s = dataset_list[i]
         auc, f1 = test(mwuf_model.model, dataloaders['test'], device)
         auc_list.append(auc.item())
+        f1_list.append(f1.item())
         print("[mwuf] evaluate on [test dataset] auc: {:.4f}, F1 score: {:.4f}".format(auc, f1))
         if i < len(dataset_list) - 1:
             mwuf_model.model.only_optimize_itemid()
             train(mwuf_model.model, dataloaders[train_s], device, epoch, lr, weight_decay, save_path)
     print("*"*20, "mwuf", "*"*20)
-    return auc_list
+    return auc_list, f1_list
 
 def cvar(model,
        dataloaders,
@@ -336,7 +344,8 @@ def cvar(model,
        lr,
        weight_decay,
        device,
-       save_dir):
+       save_dir,
+       only_init=False):
     print("*"*20, "cvar", "*"*20)
     device = torch.device(device)
     save_dir = os.path.join(save_dir, model_name)
@@ -383,30 +392,34 @@ def cvar(model,
     warm_up(train_base, epochs=1, iters=cvar_iters, logger=True)
     # test by steps 
     dataset_list = ['train_warm_a', 'train_warm_b', 'train_warm_c', 'test']
-    auc_list = []
+    auc_list, f1_list = [], []
     for i, train_s in enumerate(dataset_list):
         print("#"*10, dataset_list[i],'#'*10)
         train_s = dataset_list[i]
         auc, f1 = test(warm_model.model, dataloaders['test'], device)
         auc_list.append(auc.item())
+        f1_list.append(f1.item())
         print("[cvar] evaluate on [test dataset] auc: {:.4f}, F1 score: {:.4f}".format(auc, f1))
         if i < len(dataset_list) - 1:
             warm_model.model.only_optimize_itemid()
             train(warm_model.model, dataloaders[train_s], device, epoch, lr, weight_decay, save_path)
-            warm_up(dataloaders[train_s], epochs=cvar_epochs, iters=cvar_iters, logger=False)
+            if not only_init:
+                warm_up(dataloaders[train_s], epochs=cvar_epochs, iters=cvar_iters, logger=False)
     print("*"*20, "cvar", "*"*20)
-    return auc_list
+    return auc_list, f1_list
 
 def run(model, dataloaders, args, model_name, warm):
     if warm == 'base':
-        auc_list = base(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
+        auc_list, f1_list = base(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
     elif warm == 'mwuf':
-        auc_list = mwuf(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
+        auc_list, f1_list = mwuf(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
     elif warm == 'metaE': 
-        auc_list = metaE(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
+        auc_list, f1_list = metaE(model, dataloaders, model_name, args.epoch, args.lr, args.weight_decay, args.device, args.save_dir)
     elif warm == 'cvar': 
-        auc_list = cvar(model, dataloaders, model_name, args.epoch, args.cvar_epochs, args.cvar_iters, args.lr, args.weight_decay, args.device, args.save_dir)
-    return auc_list
+        auc_list, f1_list = cvar(model, dataloaders, model_name, args.epoch, args.cvar_epochs, args.cvar_iters, args.lr, args.weight_decay, args.device, args.save_dir)
+    elif warm == 'cvar_init': 
+        auc_list, f1_list = cvar(model, dataloaders, model_name, args.epoch, args.cvar_epochs, args.cvar_iters, args.lr, args.weight_decay, args.device, args.save_dir, only_init=True)
+    return auc_list, f1_list
 
 if __name__ == '__main__':
     args = get_args()
@@ -429,10 +442,13 @@ if __name__ == '__main__':
         if len(args.pretrain_model_path) > 0:
             torch.save(model, model_path)
     # warmup train and test
-    avg_auc_list = []
-    for i in range(1):
+    avg_auc_list, avg_f1_list = [], []
+    for i in range(args.runs):
         model_v = copy.deepcopy(model).to(args.device)
-        auc_list = run(model_v, dataloaders, args, args.model_name, args.warmup_model)
+        auc_list, f1_list = run(model_v, dataloaders, args, args.model_name, args.warmup_model)
         avg_auc_list.append(np.array(auc_list))
+        avg_f1_list.append(np.array(f1_list))
     avg_auc_list = list(np.stack(avg_auc_list).mean(axis=0))
-    print(avg_auc_list)
+    avg_f1_list = list(np.stack(avg_f1_list).mean(axis=0))
+    print("auc: {}".format(avg_auc_list))
+    print("f1: {}".format(avg_f1_list))

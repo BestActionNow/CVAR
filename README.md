@@ -72,9 +72,9 @@ Citation
 
 If you want to refer to our work, please cite our paper as:
 ```
-@article{
+@inproceedings{zhao2022improving,
   title={Improving Item Cold-start Recommendation via Model-agnostic Conditional Variational Autoencoder},
-  author={Xu Zhao, Yi Ren, Ying Du, Shenzheng Zhang, Nian Wang},
+  author={Xu, Zhao and Yi, Ren and Ying, Du and Shenzheng, Zhang and Nian, Wang},
   booktitle={SIGIR},
   year={2022},
 }

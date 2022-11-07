@@ -1,5 +1,6 @@
 *__pycache__/
 chkpt/
+*.ipynb_checkpoints*
 datahub/movielens1M/*.pkl
 datahub/movielens1M/*.dat
 datahub/taobaoAD/*.pkl

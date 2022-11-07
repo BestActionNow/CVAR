@@ -2,4 +2,5 @@
 chkpt/
 datahub/movielens1M/*.pkl
 datahub/taobaoAD/*.pkl
+datahub/item2users/*.pkl
 pretrain_backbones/*

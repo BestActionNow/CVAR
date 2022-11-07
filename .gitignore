@@ -1,6 +1,8 @@
 *__pycache__/
 chkpt/
 datahub/movielens1M/*.pkl
+datahub/movielens1M/*.dat
 datahub/taobaoAD/*.pkl
+datahub/taobaoAD/*.dat
 datahub/item2users/*.pkl
 pretrain_backbones/*
